@@ -1,12 +1,16 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import styles from "@/app/page.module.css";
 
-const Table = ({ csvData }) => {
+const Table = ({ csvData, updateFile }) => {
     const [headings, setHeadings] = useState([]);
     const [currentRow, setCurrentRow] = useState();
     const [currentCol, setCurrentCol] = useState();
+    const [currentKey, setCurrentKey] = useState();
     const [currentHeaderIndex, setCurrentHeaderIndex] = useState();
     const [data, setData] = useState();
+    const [menuHeight, setMenuHeight] = useState(0);
+    const [menuWidth, setMenuWidth] = useState(0);
+    const [menuVisibility, setMenuVisibility] = useState("hidden");
 
     useEffect(() => {
         setData(csvData);
@@ -18,10 +22,31 @@ const Table = ({ csvData }) => {
         }
     }, [data]);
 
-    const handleRightClick = (event, row_id, col_id) => {
+    const convertEntriesToObject = (entries) => {
+        let obj = {};
+        entries?.forEach((item) => {
+            obj = { ...obj, [item[0]]: item[1] };
+        });
+        return obj;
+    };
+
+    const resetCell = () => {
+        setCurrentCol(null);
+        setCurrentRow(null);
+        setCurrentKey(null);
+        setMenuHeight(null);
+        setMenuWidth(null);
+        setMenuVisibility("hidden");
+    };
+
+    const handleRightClick = (event, row_id, col_id, key) => {
         event.preventDefault();
+        setMenuHeight(event.clientY);
+        setMenuWidth(event.clientX);
+        setMenuVisibility("visible");
         setCurrentRow(row_id);
         setCurrentCol(col_id);
+        setCurrentKey(key);
         event.stopPropagation();
     };
 
@@ -33,16 +58,14 @@ const Table = ({ csvData }) => {
         let arr = data;
         arr?.splice(row_index + 1, 0, obj);
         setData(arr);
-        setCurrentCol("");
-        setCurrentRow("");
+        resetCell();
     };
 
     const handleDeleteRow = (row_index) => {
         let arr = data;
         arr?.splice(row_index, 1);
         setData(arr);
-        setCurrentCol("");
-        setCurrentRow("");
+        resetCell();
     };
 
     const handleAddColumn = (col_key) => {
@@ -51,17 +74,13 @@ const Table = ({ csvData }) => {
             const entries = Object.entries(item);
             const indexItem = entries?.find(([key, value], index) => key === col_key);
             const index = entries?.findIndex((item) => item[0] === indexItem[0]);
-            const column = ["Untitled column", ""];
+            const untitledColumnCount = Object.keys(item)?.filter((i) =>
+                i?.includes("Untitled column")
+            )?.length;
+            const column = [`Untitled column ${untitledColumnCount + 1}`, ""];
             entries.splice(index + 1, 0, column);
 
-            const object = entries.reduce(function (obj, current) {
-                const key = current[0];
-                const value = current[1];
-                obj[key] = value;
-                return obj;
-            }, {});
-
-            return object;
+            return convertEntriesToObject(entries);
         });
 
         const heads = headings;
@@ -70,8 +89,7 @@ const Table = ({ csvData }) => {
         setHeadings(heads);
 
         setData(newArr);
-        setCurrentCol("");
-        setCurrentRow("");
+        resetCell();
     };
 
     const handleDeleteColumn = (col_key) => {
@@ -80,22 +98,14 @@ const Table = ({ csvData }) => {
             const entries = Object.entries(item);
             const newEntries = entries?.filter(([key, value]) => key !== col_key);
 
-            const object = newEntries.reduce(function (obj, current) {
-                const key = current[0];
-                const value = current[1];
-                obj[key] = value;
-                return obj;
-            }, {});
-
-            return object;
+            return convertEntriesToObject(newEntries);
         });
 
         const heads = headings?.filter((i) => i !== col_key);
         setHeadings(heads);
 
         setData(newArr);
-        setCurrentCol("");
-        setCurrentRow("");
+        resetCell();
     };
 
     const handleHeaderRightClick = (event, index) => {
@@ -113,22 +123,18 @@ const Table = ({ csvData }) => {
             const entries = Object.entries(item);
             const indexItem = entries?.find(([key, value]) => key === headerItem);
             const i = entries?.findIndex((item) => item[0] === indexItem[0]);
-            const column = ["Untitled column", ""];
+            const untitledColumnCount = Object.keys(item)?.filter((i) =>
+                i?.includes("Untitled column")
+            )?.length;
+            const column = [`Untitled column ${untitledColumnCount + 1}`, ""];
             entries.splice(i + 1, 0, column);
 
-            const object = entries.reduce(function (obj, current) {
-                const key = current[0];
-                const value = current[1];
-                obj[key] = value;
-                return obj;
-            }, {});
-
-            return object;
+            return convertEntriesToObject(entries);
         });
 
         setData(newArr);
-
         setCurrentHeaderIndex("");
+        resetCell();
     };
 
     const handleHeaderDeleteColumn = (headerItem) => {
@@ -140,18 +146,11 @@ const Table = ({ csvData }) => {
             const entries = Object.entries(item);
             const newEntries = entries?.filter(([key, value]) => key !== headerItem);
 
-            const object = newEntries.reduce(function (obj, current) {
-                const key = current[0];
-                const value = current[1];
-                obj[key] = value;
-                return obj;
-            }, {});
-
-            return object;
+            return convertEntriesToObject(newEntries);
         });
 
         setData(newArr);
-        setCurrentHeaderIndex("");
+        resetCell();
     };
 
     const handleHeaderRowAdd = () => {
@@ -167,7 +166,6 @@ const Table = ({ csvData }) => {
     const handleTableDataChange = (event, index, field) => {
         event.preventDefault();
         const tableData = [...data];
-        console.log(true, event.currentTarget.innerText);
         tableData[index][field] = event.currentTarget.innerText;
         setData(tableData);
     };
@@ -176,12 +174,26 @@ const Table = ({ csvData }) => {
         const heads = [...headings];
         heads[index] = event.currentTarget.innerText;
         setHeadings(heads);
+
+        const arr = data;
+        const newArr = arr?.map((item) => {
+            const entries = Object.entries(item);
+            let obj = {};
+            entries?.forEach(([key, value], entryIndex) => {
+                if (index === entryIndex) {
+                    obj = { ...obj, [event.currentTarget.innerText]: value };
+                } else {
+                    obj = { ...obj, [key]: value };
+                }
+            });
+
+            return obj;
+        });
+
+        setData(newArr);
     };
 
     const handleDataSave = () => {
-        console.log(data);
-        console.log(headings);
-
         const arr = data?.map((item, index) => {
             const tdObj = {};
             let tdIndex = 0;
@@ -191,8 +203,9 @@ const Table = ({ csvData }) => {
             }
             return tdObj;
         });
-
-        console.log("FINAL", arr);
+        setData(arr);
+        updateFile(arr);
+        alert("Data saved successfully");
     };
 
     return (
@@ -200,19 +213,14 @@ const Table = ({ csvData }) => {
             {data?.length > 0 && (
                 <>
                     <div className={styles?.tableWp}>
-                        <table
-                            className={styles.table}
-                            onClick={() => {
-                                setCurrentCol(null);
-                                setCurrentRow(null);
-                            }}>
+                        <table className={styles.table} onClick={resetCell}>
                             <tr className={styles.tableRow}>
                                 {headings?.length > 0 &&
                                     headings?.map((i, index) => {
                                         return (
                                             <th
                                                 className={styles?.tableData}
-                                                key={i + index}
+                                                key={Math.random() + index}
                                                 onContextMenu={(event) =>
                                                     handleHeaderRightClick(event, index)
                                                 }
@@ -250,48 +258,21 @@ const Table = ({ csvData }) => {
                                                 <>
                                                     <td
                                                         className={styles?.tableData}
-                                                        key={key + col_index}
-                                                        onContextMenu={(event) =>
-                                                            handleRightClick(event, row_index, col_index)
-                                                        }
+                                                        key={Math.random() + col_index}
+                                                        onContextMenu={(event) => {
+                                                            handleRightClick(
+                                                                event,
+                                                                row_index,
+                                                                col_index,
+                                                                key
+                                                            );
+                                                        }}
                                                         contentEditable
                                                         suppressContentEditableWarning
                                                         onBlur={(event) =>
                                                             handleTableDataChange(event, row_index, key)
                                                         }>
                                                         {value}
-                                                        {/* <p>{value}</p> */}
-                                                        {currentRow === row_index &&
-                                                            currentCol === col_index && (
-                                                                <div className={styles.rightClickMenu}>
-                                                                    <ul>
-                                                                        <li
-                                                                            onClick={() =>
-                                                                                handleAddColumn(key)
-                                                                            }>
-                                                                            Insert a new column
-                                                                        </li>
-                                                                        <li
-                                                                            onClick={() =>
-                                                                                handleRowAdd(row_index)
-                                                                            }>
-                                                                            Insert a new row
-                                                                        </li>
-                                                                        <li
-                                                                            onClick={() =>
-                                                                                handleDeleteRow(row_index)
-                                                                            }>
-                                                                            Delete selected row
-                                                                        </li>
-                                                                        <li
-                                                                            onClick={() =>
-                                                                                handleDeleteColumn(key)
-                                                                            }>
-                                                                            Delete selected column
-                                                                        </li>
-                                                                    </ul>
-                                                                </div>
-                                                            )}
                                                     </td>
                                                 </>
                                             );
@@ -300,6 +281,16 @@ const Table = ({ csvData }) => {
                                 );
                             })}
                         </table>
+                        <div
+                            className={styles.rightClickMenu}
+                            style={{ visibility: menuVisibility, top: menuHeight, left: menuWidth }}>
+                            <ul>
+                                <li onClick={() => handleAddColumn(currentKey)}>Insert a new column</li>
+                                <li onClick={() => handleRowAdd(currentRow)}>Insert a new row</li>
+                                <li onClick={() => handleDeleteRow(currentRow)}>Delete selected row</li>
+                                <li onClick={() => handleDeleteColumn(currentKey)}>Delete selected column</li>
+                            </ul>
+                        </div>
                     </div>
                     <button onClick={handleDataSave}>Save</button>
                 </>
