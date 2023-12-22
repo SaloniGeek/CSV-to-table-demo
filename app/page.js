@@ -59,9 +59,9 @@ export default function Home() {
 
             <Table csvData={jsonData} updateFile={updateFile} />
 
-            <Link href={savedFile} download>
+            <a href={savedFile} download={filename}>
                 Export CSV{" "}
-            </Link>
+            </a>
         </main>
     );
 }
