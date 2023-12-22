@@ -40,7 +40,7 @@ export default function Home() {
     const updateFile = (csvData) => {
         const csv = generateCsv(csvConfig)(csvData);
         var blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-        var url = blob;
+        var url = URL.createObjectURL(blob);
         setSavedFile(url);
     };
 
